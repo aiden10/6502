@@ -20,9 +20,9 @@ Stack pointer (8 bits)
     }
     public String toString(){
         boolean[] flags = {CF, ZF, IF, DMF, BF, OF, NF };
-        return "REGISTERS: {A: " + A + ", X: " + X + ", Y: " + Y + "}\n" +
+        return "REGISTERS: {A: " + (A & 0xFF) + ", X: " + (X & 0xFF) + ", Y: " + (Y & 0xFF) + "}\n" +
                 "FLAGS: " + Arrays.toString(flags) + "\n" +
-                "POINTERS: {SP: " + SP + ", " + "PC: " + PC + "}";
+                "POINTERS: {SP: " + (SP & 0xFF) + ", " + "PC: " + (PC & 0xFFFF) + "}";
     }
     private void LDA_FLAGS(){
         ZF = (A == 0);
@@ -39,8 +39,45 @@ Stack pointer (8 bits)
     }
     private void LDA_ZP_X(){
         byte zp_address = fetch();
-        byte address = (byte) (zp_address + X);
+        byte address = (byte) ((zp_address & 0xFF) + (X & 0xFF));
         A = memory[address & 0xFF];
+        LDA_FLAGS();
+    }
+    private void LDA_ABS(){
+        byte low_bytes = fetch();
+        byte high_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (high_bytes & 0xFF)); // short here because the address is 16 bits
+        A = memory[address & 0xFFFF ]; // but Java doesn't support unsigned so a bitmask is once again necessary.
+        LDA_FLAGS();
+    }
+    private void LDA_ABS_X(){
+        byte low_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        A = memory[address & 0xFFFF ];
+        LDA_FLAGS();
+    }
+    private void LDA_ABS_Y(){
+        byte low_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (Y & 0xFF));
+        A = memory[address & 0xFFFF ];
+        LDA_FLAGS();
+    }
+    private void LDA_INDIRECT_X(){
+        byte zp = fetch();
+        short intermediate = (short) ((zp & 0xFF) + (X & 0xFF));
+        byte low = memory[intermediate & 0xFFFF];
+        byte high = memory[(intermediate & 0xFFFF) + 1];
+        short address = (short) ((low & 0xFF) + (high & 0xFF));
+        A = memory[address & 0xFFFF];
+        LDA_FLAGS();
+    }
+    private void LDA_INDIRECT_Y(){
+        byte zp = fetch();
+        short intermediate = (short) ((zp & 0xFF) + (Y & 0xFF));
+        byte low = memory[intermediate & 0xFFFF];
+        byte high = memory[(intermediate & 0xFFFF) + 1];
+        short address = (short) ((low & 0xFF) + (high & 0xFF));
+        A = memory[address & 0xFFFF];
         LDA_FLAGS();
     }
 
@@ -51,17 +88,15 @@ Stack pointer (8 bits)
     }
     public void execute(){
         byte instruction = fetch();
-        switch(instruction){
-            case (byte) 0xA9:
-                LDA_IMMEDIATE();
-                break;
-
-            case (byte) 0xA5:
-                LDA_ZP();
-                break;
-            case (byte) 0xB5:
-                LDA_ZP_X();
-                break;
+        switch (instruction) {
+            case (byte) 0xA9 -> LDA_IMMEDIATE();
+            case (byte) 0xA5 -> LDA_ZP();
+            case (byte) 0xB5 -> LDA_ZP_X();
+            case (byte) 0xAD -> LDA_ABS();
+            case (byte) 0xBD -> LDA_ABS_X();
+            case (byte) 0xB9 -> LDA_ABS_Y();
+            case (byte) 0xA1 -> LDA_INDIRECT_X();
+            case (byte) 0xB1 -> LDA_INDIRECT_Y();
         }
     }
 }
