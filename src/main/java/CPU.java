@@ -28,6 +28,15 @@ Stack pointer (8 bits)
         ZF = (A == 0);
         NF = (A & 0b10000000) > 0;
     }
+    private void LDX_FLAGS(){
+        ZF = (X == 0);
+        NF = (X & 0b10000000) > 0;
+    }
+    private void LDY_FLAGS(){
+        ZF = (Y == 0);
+        NF = (Y & 0b10000000) > 0;
+    }
+
     private void LDA_IMMEDIATE(){
         A = fetch(); // load with byte after instruction
         LDA_FLAGS();
@@ -39,8 +48,8 @@ Stack pointer (8 bits)
     }
     private void LDA_ZP_X(){
         byte zp_address = fetch();
-        byte address = (byte) ((zp_address & 0xFF) + (X & 0xFF));
-        A = memory[address & 0xFF];
+        short address = (short) ((zp_address & 0xFF) + (X & 0xFF));
+        A = memory[address & 0xFFFF];
         LDA_FLAGS();
     }
     private void LDA_ABS(){
@@ -81,6 +90,64 @@ Stack pointer (8 bits)
         LDA_FLAGS();
     }
 
+    private void LDX_IMMEDIATE(){
+        X = fetch();
+        LDX_FLAGS();
+    }
+    private void LDX_ZP(){
+        byte zp = fetch();
+        X = memory[zp & 0xFF];
+        LDX_FLAGS();
+    }
+    private void LDX_ZP_Y(){
+        byte zp = fetch();
+        short address = (short) ((zp & 0xFF) + (Y & 0xFF));
+        X = memory[address & 0xFFFF];
+        LDX_FLAGS();
+    }
+    private void LDX_ABS(){
+        byte low_bytes = fetch();
+        byte high_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (high_bytes & 0xFF));
+        X = memory[address & 0xFFFF];
+        LDX_FLAGS();
+    }
+    private void LDX_ABS_Y(){
+        byte low_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (Y & 0xFF));
+        X = memory[address & 0xFFFF ];
+        LDX_FLAGS();
+    }
+
+    private void LDY_IMMEDIATE(){
+        Y = fetch();
+        LDY_FLAGS();
+    }
+    private void LDY_ZP(){
+        byte zp = fetch();
+        Y = memory[zp & 0xFF];
+        LDY_FLAGS();
+    }
+    private void LDY_ZP_X(){
+        byte zp = fetch();
+        short address = (short) ((zp & 0xFF) + (X & 0xFF));
+        Y = memory[address & 0xFFFF];
+        LDY_FLAGS();
+    }
+    private void LDY_ABS(){
+        byte low_bytes = fetch();
+        byte high_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (high_bytes & 0xFF));
+        Y = memory[address & 0xFFFF];
+        LDY_FLAGS();
+    }
+    private void LDY_ABS_X(){
+        byte low_bytes = fetch();
+        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        Y = memory[address & 0xFFFF ];
+        LDX_FLAGS();
+    }
+
     private byte fetch(){
         byte data = memory[PC];
         PC++;
@@ -89,6 +156,8 @@ Stack pointer (8 bits)
     public void execute(){
         byte instruction = fetch();
         switch (instruction) {
+
+            // LDA
             case (byte) 0xA9 -> LDA_IMMEDIATE();
             case (byte) 0xA5 -> LDA_ZP();
             case (byte) 0xB5 -> LDA_ZP_X();
@@ -97,6 +166,20 @@ Stack pointer (8 bits)
             case (byte) 0xB9 -> LDA_ABS_Y();
             case (byte) 0xA1 -> LDA_INDIRECT_X();
             case (byte) 0xB1 -> LDA_INDIRECT_Y();
+
+            // LDX
+            case (byte) 0xA2 -> LDX_IMMEDIATE();
+            case (byte) 0xA6 -> LDX_ZP();
+            case (byte) 0xB6 -> LDX_ZP_Y();
+            case (byte) 0xAE -> LDX_ABS();
+            case (byte) 0xBE -> LDX_ABS_Y();
+
+            // LDY
+            case (byte) 0xA0 -> LDY_IMMEDIATE();
+            case (byte) 0xA4 -> LDY_ZP();
+            case (byte) 0xB4 -> LDY_ZP_X();
+            case (byte) 0xAC -> LDY_ABS();
+            case (byte) 0xBC -> LDY_ABS_X();
         }
     }
 }
