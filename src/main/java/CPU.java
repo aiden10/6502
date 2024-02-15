@@ -24,7 +24,8 @@ Stack pointer (8 bits)
     private static final int MAX_SIZE = 0xFF38;
     public CPU(byte[] memory){
         CF = ZF = IF = DMF = BF = OF = NF = false;
-        PC = 0;
+        PC = (short) 0x0;
+        SP = (byte) 0xFF; // I'm not actually sure where this should start
         this.memory = memory;
     }
     public String toString(){
@@ -92,21 +93,21 @@ Stack pointer (8 bits)
     private short ABS_ADDRESS(){
         byte low_bytes = fetch();
         byte high_bytes = fetch();
-        return (short) ((low_bytes & 0xFF) + (high_bytes & 0xFF));
+        return (short) (((high_bytes & 0xFF) << 8) | (low_bytes & 0xFF));
     }
     private short INDIRECT_X_ADDRESS(){
         byte zp = fetch();
-        short intermediate = (short) ((zp & 0xFF) + (X & 0xFF));
+        short intermediate = (short) (((zp & 0xFF) << 8) | (X & 0xFF));
         byte low = memory[intermediate & 0xFFFF];
         byte high = memory[(intermediate & 0xFFFF) + 1];
-        return (short) ((low & 0xFF) + (high & 0xFF));
+        return (short) (((high & 0xFF) << 8) | (low & 0xFF));
     }
     private short INDIRECT_Y_ADDRESS(){
         byte zp = fetch();
-        short intermediate = (short) ((zp & 0xFF) + (Y & 0xFF));
+        short intermediate = (short) (((zp & 0xFF) << 8) | (Y & 0xFF));
         byte low = memory[intermediate & 0xFFFF];
         byte high = memory[(intermediate & 0xFFFF) + 1];
-        return (short) ((low & 0xFF) + (high & 0xFF));
+        return (short) (((high & 0xFF) << 8) | (low & 0xFF));
     }
 
     // LDA
@@ -172,7 +173,7 @@ Stack pointer (8 bits)
     }
     private void LDX_ABS_Y(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (Y & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (Y & 0xFF));
         X = memory[address & 0xFFFF ];
         LDX_FLAGS();
     }
@@ -199,7 +200,7 @@ Stack pointer (8 bits)
     }
     private void LDY_ABS_X(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (X & 0xFF));
         Y = memory[address & 0xFFFF ];
         LDX_FLAGS();
     }
@@ -215,19 +216,16 @@ Stack pointer (8 bits)
         memory[address & 0xFFFF] = A;
     }
     private void STA_ABS(){
-        byte low_bytes = fetch();
-        byte high_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (high_bytes & 0xFF));
-        memory[address & 0xFFFF] = A;
+        memory[ABS_ADDRESS() & 0xFFFF] = A;
     }
     private void STA_ABS_X(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (X & 0xFF));
         memory[address & 0xFFFF] = A;
     }
     private void STA_ABS_Y(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (Y & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (Y & 0xFF));
         memory[address & 0xFFFF] = A;
     }
     private void STA_INDIRECT_X(){
@@ -350,7 +348,7 @@ Stack pointer (8 bits)
     }
     private void INC_ABS_X(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (X & 0xFF));
         memory[address & 0xFFFF]++;
         INC_FLAGS(address);
     }
@@ -374,7 +372,7 @@ Stack pointer (8 bits)
     }
     private void DEC_ABS_X(){
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (X & 0xFF));
         memory[address & 0xFFFF]--;
         INC_FLAGS(address);
     }
@@ -407,12 +405,12 @@ Stack pointer (8 bits)
     }
     private void CMP_ABS_X(){ // 4* cycles
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (X & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (X & 0xFF));
         CMP_FLAGS(memory[address & 0xFFFF]);
     }
     private void CMP_ABS_Y(){ // 4* cycles
         byte low_bytes = fetch();
-        short address = (short) ((low_bytes & 0xFF) + (Y & 0xFF));
+        short address = (short) (((low_bytes & 0xFF) << 8) | (Y & 0xFF));
         CMP_FLAGS(memory[address & 0xFFFF]);
     }
     private void CMP_INDIRECT_X(){ // 6 cycles
@@ -469,7 +467,8 @@ Stack pointer (8 bits)
     }
     private void BNE(){ // 2** cycles
         if (!ZF){
-            PC += (int) fetch();
+            byte value = fetch();
+            PC += value;
         }
     }
     private void BPL(){ // 2** cycles
@@ -522,15 +521,52 @@ Stack pointer (8 bits)
         byte low = memory[SP & 0xFF];
         SP++;
         byte high = memory[SP & 0xFF];
-        PC += ((low & 0xFF) + (high & 0xFF));
+        short value = (short) (((low & 0xFF) << 8) | (high & 0xFF));
+        PC += value;
     }
+
+    // ADC
+    private void ADC_IMMEDIATE(){ // 2 cycles
+        byte value = fetch();
+        int sum = (value & 0xFF) + (CF ? 1 : 0);
+        OF = ((A ^ sum) & (value ^ sum) & 0x80) != 0;
+        CF = (sum > 255);
+        A = (byte) sum;
+        ZF = (A == 0);
+        NF = ((A & 0b10000000) != 0);
+    }
+    private void ADC_ZP(){ // 3 cycles
+        byte zp_address = fetch();
+        byte value = memory[zp_address & 0xFF];
+        int sum = (value & 0xFF) + (CF ? 1 : 0);
+        OF = ((A ^ sum) & (value ^ sum) & 0x80) != 0;
+        CF = (sum > 255);
+        A = (byte) sum;
+        ZF = (A == 0);
+        NF = ((A & 0b10000000) != 0);
+    }
+
+    // BRK
+    private void BRK(){ // 7 cycles
+        PC++;
+        byte low = (byte)(PC);
+        byte high = (byte)(PC >> 8);
+        memory[SP & 0xFF] = low;
+        SP--;
+        memory[SP & 0xFF] = high;
+        IF = true;
+        PC = (short) (PC & 0x00FF); // clear first byte
+        PC = (short) (PC | IRQ_LOW << 8);
+        PC = (short) (PC & 0xFF00); // clear second byte
+        PC = (short) (PC | IRQ_HIGH << 8);
+    }
+
     private byte fetch(){
-        byte data = memory[PC];
+        byte data = memory[PC & 0xFFFF];
         PC++;
         return data;
     }
     public void execute(){
-        CLEAR_FLAGS();
         byte instruction = fetch();
         switch (instruction) {
 
@@ -688,6 +724,15 @@ Stack pointer (8 bits)
 
             // RTS
             case (byte) 0x60 -> RTS();
+
+            // ADC
+            case (byte) 0x69 -> ADC_IMMEDIATE();
+            case (byte) 0x65 -> ADC_ZP();
+
+            // BRK
+            case (byte) 0x00 -> BRK();
         }
+        System.out.println("0x" + Integer.toHexString((char)(instruction & 0xFF)));
+        System.out.println("PC: " + (PC & 0xFFFF));
     }
 }
